@@ -16,6 +16,7 @@ app = FastAPI()
 class ImageRequest(BaseModel):
     prompts: list[str]
     provider: str  # "openai" or "gemini"
+    api_key: str
 
 
 class ImageResult(BaseModel):
@@ -28,11 +29,11 @@ class ImageResponse(BaseModel):
     results: list[ImageResult]
 
 
-async def generate_openai(prompt: str) -> ImageResult:
+async def generate_openai(prompt: str, api_key: str) -> ImageResult:
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = AsyncOpenAI(api_key=api_key)
         response = await client.images.generate(
             model="dall-e-3",
             prompt=prompt,
@@ -45,11 +46,11 @@ async def generate_openai(prompt: str) -> ImageResult:
         return ImageResult(prompt=prompt, error=str(e))
 
 
-async def generate_gemini(prompt: str) -> ImageResult:
+async def generate_gemini(prompt: str, api_key: str) -> ImageResult:
     try:
         from google import genai
 
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        client = genai.Client(api_key=api_key)
         response = await asyncio.to_thread(
             client.models.generate_images,
             model="imagen-3.0-generate-002",
@@ -73,17 +74,13 @@ async def generate_images(request: ImageRequest):
         raise HTTPException(status_code=400, detail="No prompts provided")
 
     if request.provider == "openai":
-        if not os.getenv("OPENAI_API_KEY"):
-            raise HTTPException(status_code=400, detail="OPENAI_API_KEY not set")
         gen_fn = generate_openai
     elif request.provider == "gemini":
-        if not os.getenv("GEMINI_API_KEY"):
-            raise HTTPException(status_code=400, detail="GEMINI_API_KEY not set")
         gen_fn = generate_gemini
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
-    tasks = [gen_fn(prompt) for prompt in prompts]
+    tasks = [gen_fn(prompt, request.api_key) for prompt in prompts]
     results = await asyncio.gather(*tasks)
 
     return ImageResponse(results=list(results))

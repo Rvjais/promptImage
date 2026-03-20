@@ -242,6 +242,69 @@
         }
 
         .fill-all-row button:hover { border-color: #667eea; color: #667eea; }
+
+        .settings-toggle {
+            padding: 0.6rem 1rem;
+            border: 1px solid #2a2a2a;
+            background: #1a1a1a;
+            color: #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .settings-toggle:hover { border-color: #667eea; color: #667eea; }
+
+        .settings-panel {
+            display: none;
+            max-width: 500px;
+            margin: 0 auto 1.5rem;
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 1.2rem;
+        }
+
+        .settings-panel.visible { display: block; }
+
+        .settings-panel h3 {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-bottom: 0.8rem;
+        }
+
+        .key-field {
+            margin-bottom: 0.8rem;
+        }
+
+        .key-field label {
+            display: block;
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 0.3rem;
+        }
+
+        .key-field input {
+            width: 100%;
+            padding: 0.5rem 0.8rem;
+            border: 1px solid #2a2a2a;
+            background: #0e0e0e;
+            color: #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            outline: none;
+        }
+
+        .key-field input:focus { border-color: #667eea; }
+
+        .key-status {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            color: #888;
+        }
+
+        .key-status .set { color: #4ade80; }
     </style>
 </head>
 <body>
@@ -257,6 +320,20 @@
                 <button data-provider="gemini">Gemini (Imagen)</button>
             </div>
             <button class="generate-btn" onclick="generateAll()">Generate All</button>
+            <button class="settings-toggle" onclick="toggleSettings()">API Keys</button>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel">
+            <h3>API Keys (stored in your browser only)</h3>
+            <div class="key-field">
+                <label>OpenAI API Key</label>
+                <input type="password" id="openaiKey" placeholder="sk-..." oninput="saveKeys()">
+            </div>
+            <div class="key-field">
+                <label>Gemini API Key</label>
+                <input type="password" id="geminiKey" placeholder="AI..." oninput="saveKeys()">
+            </div>
+            <div class="key-status" id="keyStatus"></div>
         </div>
 
         <div class="fill-all-row">
@@ -272,6 +349,38 @@
     <script>
         const NUM_PROMPTS = 10;
         let currentProvider = 'openai';
+
+        // Load saved keys
+        function loadKeys() {
+            const openaiKey = localStorage.getItem('openai_key') || '';
+            const geminiKey = localStorage.getItem('gemini_key') || '';
+            document.getElementById('openaiKey').value = openaiKey;
+            document.getElementById('geminiKey').value = geminiKey;
+            updateKeyStatus();
+        }
+
+        function saveKeys() {
+            localStorage.setItem('openai_key', document.getElementById('openaiKey').value.trim());
+            localStorage.setItem('gemini_key', document.getElementById('geminiKey').value.trim());
+            updateKeyStatus();
+        }
+
+        function updateKeyStatus() {
+            const o = localStorage.getItem('openai_key');
+            const g = localStorage.getItem('gemini_key');
+            const parts = [];
+            if (o) parts.push('OpenAI: <span class="set">set</span>');
+            else parts.push('OpenAI: not set');
+            if (g) parts.push('Gemini: <span class="set">set</span>');
+            else parts.push('Gemini: not set');
+            document.getElementById('keyStatus').innerHTML = parts.join(' &nbsp;|&nbsp; ');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsPanel').classList.toggle('visible');
+        }
+
+        loadKeys();
 
         // Provider toggle
         document.querySelectorAll('.provider-toggle button').forEach(btn => {
@@ -358,10 +467,18 @@
             document.getElementById('statusBar').textContent = `Generating ${filledPrompts.length} image(s) in parallel...`;
 
             try {
+                const apiKey = currentProvider === 'openai'
+                    ? localStorage.getItem('openai_key')
+                    : localStorage.getItem('gemini_key');
+
+                if (!apiKey) {
+                    throw new Error(`Please set your ${currentProvider === 'openai' ? 'OpenAI' : 'Gemini'} API key first (click "API Keys")`);
+                }
+
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompts: prompts.filter(p => p), provider: currentProvider })
+                    body: JSON.stringify({ prompts: prompts.filter(p => p), provider: currentProvider, api_key: apiKey })
                 });
 
                 if (!response.ok) {

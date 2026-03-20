@@ -5,11 +5,11 @@ import json
 from http.server import BaseHTTPRequestHandler
 
 
-def generate_openai_sync(prompt: str) -> dict:
+def generate_openai_sync(prompt: str, api_key: str) -> dict:
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = OpenAI(api_key=api_key)
         response = client.images.generate(
             model="dall-e-3",
             prompt=prompt,
@@ -22,11 +22,11 @@ def generate_openai_sync(prompt: str) -> dict:
         return {"prompt": prompt, "error": str(e)}
 
 
-def generate_gemini_sync(prompt: str) -> dict:
+def generate_gemini_sync(prompt: str, api_key: str) -> dict:
     try:
         from google import genai
 
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_images(
             model="imagen-3.0-generate-002",
             prompt=prompt,
@@ -42,21 +42,21 @@ def generate_gemini_sync(prompt: str) -> dict:
         return {"prompt": prompt, "error": str(e)}
 
 
-async def generate_openai(prompt: str) -> dict:
-    return await asyncio.to_thread(generate_openai_sync, prompt)
+async def generate_openai(prompt: str, api_key: str) -> dict:
+    return await asyncio.to_thread(generate_openai_sync, prompt, api_key)
 
 
-async def generate_gemini(prompt: str) -> dict:
-    return await asyncio.to_thread(generate_gemini_sync, prompt)
+async def generate_gemini(prompt: str, api_key: str) -> dict:
+    return await asyncio.to_thread(generate_gemini_sync, prompt, api_key)
 
 
-async def handle_generate(prompts: list[str], provider: str) -> list[dict]:
+async def handle_generate(prompts: list[str], provider: str, api_key: str) -> list[dict]:
     if provider == "openai":
         gen_fn = generate_openai
     else:
         gen_fn = generate_gemini
 
-    tasks = [gen_fn(prompt) for prompt in prompts]
+    tasks = [gen_fn(prompt, api_key) for prompt in prompts]
     results = await asyncio.gather(*tasks)
     return list(results)
 
@@ -69,6 +69,7 @@ class handler(BaseHTTPRequestHandler):
 
         prompts = [p for p in data.get("prompts", []) if p.strip()]
         provider = data.get("provider", "openai")
+        api_key = data.get("api_key", "")
 
         if not prompts:
             self.send_response(400)
@@ -77,21 +78,14 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"detail": "No prompts provided"}).encode())
             return
 
-        if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+        if not api_key:
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"detail": "OPENAI_API_KEY not set"}).encode())
+            self.wfile.write(json.dumps({"detail": "API key not provided"}).encode())
             return
 
-        if provider == "gemini" and not os.getenv("GEMINI_API_KEY"):
-            self.send_response(400)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"detail": "GEMINI_API_KEY not set"}).encode())
-            return
-
-        results = asyncio.run(handle_generate(prompts, provider))
+        results = asyncio.run(handle_generate(prompts, provider, api_key))
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
