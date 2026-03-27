@@ -1,10 +1,12 @@
 {
-  "rewrites": [
-    { "source": "/api/generate", "destination": "/api/generate" }
-  ],
-  "functions": {
-    "api/generate.py": {
-      "maxDuration": 300
+  "builds": [
+    {
+      "src": "api/generate.py",
+      "use": "@vercel/python"
     }
-  }
+  ],
+  "routes": [
+    { "src": "/api/generate", "dest": "/api/generate.py" },
+    { "src": "/(.*)", "dest": "/public/$1" }
+  ]
 }
