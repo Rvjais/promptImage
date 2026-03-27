@@ -53,7 +53,7 @@ async def generate_gemini(prompt: str, api_key: str) -> ImageResult:
         client = genai.Client(api_key=api_key)
         response = await asyncio.to_thread(
             client.models.generate_images,
-            model="imagen-3.0-generate-002",
+            model="imagen-3.0-generate-001",
             prompt=prompt,
             config=genai.types.GenerateImagesConfig(number_of_images=1),
         )
